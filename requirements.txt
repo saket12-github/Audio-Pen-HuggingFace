@@ -2,6 +2,8 @@
 audioop-lts; python_version>='3.13'
 # Gradio (HF Spaces SDK pins may override — avoid unsupported component kwargs)
 gradio>=4.44.0,<5.0.0
+# Starlette 1.0 dropped TemplateResponse(name, context); Gradio 4.44 still uses it → 500 on / and Jinja2 "unhashable type: dict"
+starlette>=0.40.0,<1.0.0
 # Gradio 4.44 uses HfFolder; huggingface_hub 1.0 removed it (HF Spaces pulls hub 1.x otherwise)
 huggingface_hub>=0.19.3,<1.0
 # Pydantic 2.11+ JSON schemas use additionalProperties: bool; gradio-client 1.3 crashes (TypeError on /)
