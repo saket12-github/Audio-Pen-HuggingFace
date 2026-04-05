@@ -8,7 +8,7 @@ sdk_version: 4.44.0
 app_file: app.py
 pinned: false
 license: apache-2.0
-short_description: Transcribe audio with Whisper and summarize with Together AI.
+short_description: Transcribe audio with Whisper and summarize with Together AI
 ---
 
 # Audio Pen

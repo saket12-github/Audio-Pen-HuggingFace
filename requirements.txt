@@ -1,5 +1,9 @@
+# Gradio → pydub needs audioop; stdlib removed it in 3.13 (HF Spaces default)
+audioop-lts; python_version>='3.13'
 # Gradio (HF Spaces SDK pins may override — avoid unsupported component kwargs)
 gradio>=4.44.0,<5.0.0
+# Gradio 4.44 uses HfFolder; huggingface_hub 1.0 removed it (HF Spaces pulls hub 1.x otherwise)
+huggingface_hub>=0.19.3,<1.0
 # Transcription (CTranslate2 backend — no PyTorch needed for Whisper)
 faster-whisper>=1.0.3,<2.0.0
 # Together AI (OpenAI-compatible HTTP API)
