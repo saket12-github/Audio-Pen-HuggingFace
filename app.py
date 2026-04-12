@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import gradio as gr
 
@@ -17,16 +18,35 @@ logger = logging.getLogger("audio_pen")
 
 def process_audio(audio_path: str | None, progress: gr.Progress = gr.Progress()):
     """Returns: full transcript, concise summary, detailed summary, status."""
+    t0 = time.perf_counter()
     report_progress(progress, 0.0, "Starting…", logger)
+    t_tr0 = time.perf_counter()
     transcript, terr = transcribe_audio(audio_path, progress=progress)
+    transcribe_s = time.perf_counter() - t_tr0
     if terr:
+        logger.info("Pipeline stopped after %.2fs (transcription failed)", time.perf_counter() - t0)
         return "", "", "", terr
     assert transcript is not None
 
+    t_sum0 = time.perf_counter()
     concise, detailed, serr = summarize_transcript(transcript, progress=progress)
+    summarize_s = time.perf_counter() - t_sum0
     if serr:
+        logger.info(
+            "Pipeline partial %.2fs: transcribe %.2fs, summarize %.2fs (summarization error)",
+            time.perf_counter() - t0,
+            transcribe_s,
+            summarize_s,
+        )
         return transcript, "", "", f"Transcription OK. Summarization: {serr}"
 
+    total_s = time.perf_counter() - t0
+    logger.info(
+        "Pipeline complete in %.2fs (transcribe %.2fs, summarize %.2fs)",
+        total_s,
+        transcribe_s,
+        summarize_s,
+    )
     report_progress(progress, 1.0, "Done", logger)
     return transcript, concise or "", detailed or "", "Complete: transcript + summaries."
 

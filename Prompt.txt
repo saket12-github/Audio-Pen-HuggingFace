@@ -1,6 +1,0 @@
-I noticed the speed of the transcription is slow.
-Then if takes additinal time to summarize the transcript.
-
-We are using open-source whisper model and together ai for the summarization.
-
-Please check if the speed can be improved.
