@@ -34,7 +34,13 @@ Transcription still runs if the key is missing; summarization will report a clea
 | `TOGETHER_MODEL` | Override default LLM (default: `meta-llama/Llama-3.3-70B-Instruct-Turbo`) |
 | `WHISPER_MODEL_SIZE` | Override Whisper checkpoint (default: `distil-large-v3`) |
 | `WHISPER_DEVICE` / `WHISPER_COMPUTE_TYPE` | e.g. `cpu` + `int8` on Spaces |
+| `WHISPER_BEAM_SIZE` | Decoder beam width (default **1** on CPU, **5** on GPU; higher = slower, often better quality) |
+| `WHISPER_VAD_FILTER` | `true` / `false` — voice activity filter (default true) |
+| `WHISPER_CONDITION_ON_PREVIOUS_TEXT` | `true` / `false` — context across segments (default true; `false` can be slightly faster) |
 | `SUMMARY_CHUNK_CHARS` | Transcript chunk size for map-reduce (~chars per API call) |
+| `SUMMARY_ROLLING_MAX_CHARS` | Cap for in-memory rolling notes during map step (default 24000) |
+| `TOGETHER_CONNECT_TIMEOUT_S` | Connect timeout for Together API (default 15) |
+| `LOG_LEVEL` | Python log level, e.g. `INFO`, `DEBUG` (default INFO) |
 | `MAX_AUDIO_MB` | Max upload size (default: 100) |
 
 ## Hardware
@@ -44,7 +50,10 @@ Whisper on **free CPU** can be slow for long files. For heavier use, pick **CPU 
 ## Layout
 
 - `app.py` — Gradio UI (`demo` is the `Blocks` instance Spaces expects)
-- `transcription.py` — validation + `faster-whisper`
+- `transcription.py` — `faster-whisper` load + decode
+- `audio_utils.py` — upload validation (size, extension)
 - `summarization.py` — Together chat completions, chunk → merge → concise + detailed
+- `helpers.py` — shared progress + message helpers
+- `logging_config.py` — `LOG_LEVEL` and log format
 - `config.py` — env-driven settings
 - `apt.txt` — installs **ffmpeg** for decoding common audio formats

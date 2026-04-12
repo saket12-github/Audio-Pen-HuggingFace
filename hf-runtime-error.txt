@@ -1,8 +1,0 @@
-runtime error
-Exit code: 1. Reason: Traceback (most recent call last):
-  File "/app/app.py", line 264, in <module>
-    audio_input = gr.Audio(
-  File "/usr/local/lib/python3.10/site-packages/gradio/component_meta.py", line 182, in wrapper
-    return fn(self, **kwargs)
-TypeError: Audio.__init__() got an unexpected keyword argument 'info'
-2026-01-11 06:47:55,481 - INFO - HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"

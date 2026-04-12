@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import time
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import gradio as gr
 import httpx
@@ -14,12 +14,15 @@ from config import (
     CONTEXT_TAIL_CHARS,
     SUMMARY_CHUNK_CHARS,
     SUMMARY_REDUCE_CHARS,
+    SUMMARY_ROLLING_MAX_CHARS,
     TOGETHER_API_KEY_ENV,
     TOGETHER_API_URL,
+    TOGETHER_CONNECT_TIMEOUT_S,
     TOGETHER_MAX_RETRIES,
     TOGETHER_MODEL,
     TOGETHER_TIMEOUT_S,
 )
+from helpers import report_progress, truncate_message
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +32,27 @@ def _get_api_key() -> Optional[str]:
     return key or None
 
 
+def _extract_message_text(data: dict[str, Any]) -> Optional[str]:
+    try:
+        choices = data.get("choices")
+        if not choices:
+            return None
+        choice0 = choices[0] if isinstance(choices, list) else None
+        if not isinstance(choice0, dict):
+            return None
+        msg = choice0.get("message")
+        if not isinstance(msg, dict):
+            return None
+        content = msg.get("content")
+        if content is None:
+            return None
+        return str(content).strip()
+    except (TypeError, AttributeError):
+        return None
+
+
 def _together_chat(
-    messages: list[dict],
+    messages: list[dict[str, str]],
     max_tokens: int = 4096,
     temperature: float = 0.2,
 ) -> Tuple[Optional[str], Optional[str]]:
@@ -51,10 +73,15 @@ def _together_chat(
         "Content-Type": "application/json",
     }
 
+    timeout = httpx.Timeout(
+        TOGETHER_TIMEOUT_S,
+        connect=TOGETHER_CONNECT_TIMEOUT_S,
+    )
     last_err: Optional[str] = None
+
     for attempt in range(TOGETHER_MAX_RETRIES + 1):
         try:
-            with httpx.Client(timeout=TOGETHER_TIMEOUT_S) as client:
+            with httpx.Client(timeout=timeout) as client:
                 r = client.post(TOGETHER_API_URL, headers=headers, json=payload)
             if r.status_code == 401:
                 return None, "Together API rejected the key (401). Check TOGETHER_API_KEY."
@@ -72,23 +99,32 @@ def _together_chat(
                 except json.JSONDecodeError:
                     detail = r.text[:300]
                 logger.warning("Together 400 response: %s", detail)
-                return None, f"Together API rejected the request (400). Check model name or payload. {detail!s}"[:500]
+                return None, truncate_message(
+                    f"Together API rejected the request (400). Check model name or payload. {detail!s}"
+                )
             r.raise_for_status()
-            data = r.json()
-            choice = (data.get("choices") or [{}])[0]
-            msg = (choice.get("message") or {}).get("content")
-            text = (msg or "").strip()
-            if not text:
-                return None, "Together API returned an empty response."
-            return text, None
+            try:
+                data = r.json()
+            except json.JSONDecodeError as e:
+                last_err = f"Together returned invalid JSON: {e}"
+                logger.warning("%s", last_err)
+            else:
+                text = _extract_message_text(data)
+                if text:
+                    return text, None
+                last_err = "Together API returned an empty or unrecognized response."
+                logger.warning("%s raw_keys=%s", last_err, list(data.keys()) if isinstance(data, dict) else type(data))
+        except httpx.TimeoutException as e:
+            last_err = truncate_message(f"Together request timed out: {e}")
+            logger.warning("%s", last_err)
         except httpx.HTTPStatusError as e:
-            last_err = f"Together HTTP error: {e.response.status_code}"
+            last_err = truncate_message(f"Together HTTP error: {e.response.status_code}")
             logger.exception("Together HTTPStatusError")
         except httpx.RequestError as e:
-            last_err = f"Together request failed: {e}"
+            last_err = truncate_message(f"Together request failed: {e}")
             logger.exception("Together RequestError")
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            last_err = f"Unexpected Together response shape: {e}"
+        except (KeyError, IndexError, TypeError) as e:
+            last_err = truncate_message(f"Unexpected Together response shape: {e}")
             logger.exception("Together parse error")
 
         if attempt < TOGETHER_MAX_RETRIES:
@@ -142,6 +178,13 @@ def _tail_context(s: str, n: int) -> str:
     if len(s) <= n:
         return s
     return s[-n:].strip()
+
+
+def _cap_rolling_notes(rolling: str, max_chars: int) -> str:
+    rolling = rolling.strip()
+    if len(rolling) <= max_chars:
+        return rolling
+    return rolling[-max_chars:].strip()
 
 
 def summarize_chunk_with_context(
@@ -264,16 +307,11 @@ def summarize_transcript(
     Full pipeline: chunk → per-chunk summaries with rolling context → reduce → concise + detailed.
     Returns (concise, detailed, error). If error is set, concise/detailed may be None.
     """
-    def p(fraction: float, desc: str) -> None:
-        if progress is not None:
-            progress(fraction, desc=desc)
-        logger.info("%s", desc)
-
     t = (transcript or "").strip()
     if not t:
         return None, None, "Nothing to summarize (empty transcript)."
 
-    p(0.52, "Checking Together API configuration…")
+    report_progress(progress, 0.52, "Checking Together API configuration…", logger)
     if not _get_api_key():
         return None, None, (
             f"Missing {TOGETHER_API_KEY_ENV}. Summarization is disabled until the secret is set."
@@ -291,7 +329,7 @@ def summarize_transcript(
 
     for i, ch in enumerate(chunks):
         frac = base + span * (i / max(n, 1))
-        p(frac, f"Summarizing transcript part {i + 1}/{n}…")
+        report_progress(progress, frac, f"Summarizing transcript part {i + 1}/{n}…", logger)
         prior = _tail_context(rolling, CONTEXT_TAIL_CHARS)
         note, err = summarize_chunk_with_context(ch, i, n, prior)
         if err:
@@ -299,27 +337,28 @@ def summarize_transcript(
         if note:
             partial_notes.append(note)
             rolling = (rolling + "\n\n" + note).strip()
+            rolling = _cap_rolling_notes(rolling, SUMMARY_ROLLING_MAX_CHARS)
 
     if n == 1 and partial_notes:
         synthesis = partial_notes[0].strip()
-        p(0.9, "Single segment: using chunk summary as synthesis…")
+        report_progress(progress, 0.9, "Single segment: using chunk summary as synthesis…", logger)
     else:
-        p(0.9, "Merging section summaries…")
+        report_progress(progress, 0.9, "Merging section summaries…", logger)
         synthesis, err = reduce_notes(partial_notes, max_chars=SUMMARY_REDUCE_CHARS)
         if err:
             return None, None, err
         if not synthesis.strip():
             return None, None, "Summarization produced an empty synthesis."
 
-    p(0.93, "Generating concise summary…")
+    report_progress(progress, 0.93, "Generating concise summary…", logger)
     concise, err_c = generate_concise(synthesis)
     if err_c:
         return None, None, err_c
 
-    p(0.97, "Generating detailed summary…")
+    report_progress(progress, 0.97, "Generating detailed summary…", logger)
     detailed, err_d = generate_detailed(synthesis)
     if err_d:
         return concise, None, err_d
 
-    p(1.0, "Summarization complete")
+    report_progress(progress, 1.0, "Summarization complete", logger)
     return concise, detailed, None

@@ -6,19 +6,18 @@ import os
 
 import gradio as gr
 
+from helpers import report_progress
+from logging_config import configure_logging
 from summarization import summarize_transcript
 from transcription import transcribe_audio
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
+configure_logging()
 logger = logging.getLogger("audio_pen")
 
 
 def process_audio(audio_path: str | None, progress: gr.Progress = gr.Progress()):
     """Returns: full transcript, concise summary, detailed summary, status."""
-    progress(0.0, desc="Starting…")
+    report_progress(progress, 0.0, "Starting…", logger)
     transcript, terr = transcribe_audio(audio_path, progress=progress)
     if terr:
         return "", "", "", terr
@@ -28,7 +27,7 @@ def process_audio(audio_path: str | None, progress: gr.Progress = gr.Progress())
     if serr:
         return transcript, "", "", f"Transcription OK. Summarization: {serr}"
 
-    progress(1.0, desc="Done")
+    report_progress(progress, 1.0, "Done", logger)
     return transcript, concise or "", detailed or "", "Complete: transcript + summaries."
 
 
