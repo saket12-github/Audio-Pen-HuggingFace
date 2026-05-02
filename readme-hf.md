@@ -1,3 +1,18 @@
+---
+title: Audio Pen
+emoji: 🎙️
+colorFrom: gray
+colorTo: indigo
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
+pinned: false
+license: apache-2.0
+short_description: Transcribe audio with Whisper and summarize with Together AI
+---
+
+> **Hugging Face Spaces:** This file holds the YAML front matter the Hub uses for your Space card and SDK settings. The Hub reads **`README.md`** at the repository root. When you sync this project to Hugging Face, set the Space repo’s **`README.md`** to the contents of this file (or copy the YAML + body here into `README.md` on the branch you push to the Hub). The GitHub-friendly readme without YAML is [`README.md`](README.md).
+
 <div align="center">
 
 # 🎙️ Audio Pen
@@ -15,8 +30,6 @@
 [Features](#features) · [Architecture](#architecture) · [Quick start](#quick-start) · [Configuration](#configuration) · [Project layout](#project-layout)
 
 </div>
-
-> **Hugging Face Spaces:** Space card YAML and Hub-oriented copy live in [`readme-hf.md`](readme-hf.md). The Hub still expects a root **`README.md`** with that front matter for SDK metadata — when you update your Space on Hugging Face, copy `readme-hf.md` into `README.md` on the commit you push to the Hub (or maintain a Hub branch accordingly).
 
 ---
 
@@ -111,18 +124,19 @@ flowchart TB
 
 ## 🚀 Quick start
 
-### Hugging Face Spaces
+### On this Space
 
-1. Fork or duplicate this repo into a Space (**Gradio** SDK).
-2. Open **Settings → Secrets and variables** and add:
+1. Open **Settings → Secrets and variables** and add:
 
    | Name | Value |
    |:-----|:------|
    | `TOGETHER_API_KEY` | Your [Together AI](https://www.together.ai/) API key |
 
-3. Deploy. Transcription runs without the key; summaries require it.
+2. Use the app above. Transcription runs without the key; summaries require it.
 
-For the Space **`README.md`** / YAML on the Hub, use [`readme-hf.md`](readme-hf.md).
+### From GitHub
+
+Duplicate or connect a repo with this app (Gradio SDK), use the same secrets, and deploy.
 
 ### Local run
 
@@ -189,7 +203,6 @@ Open the URL Gradio prints (usually `http://127.0.0.1:7860`).
 | `config.py` | Environment-driven settings |
 | `apt.txt` | Installs **ffmpeg** on Spaces for common audio formats |
 | `requirements.txt` | Python dependencies |
-| `readme-hf.md` | Hugging Face README with YAML front matter (copy to `README.md` on the Hub if needed) |
 
 ---
 
